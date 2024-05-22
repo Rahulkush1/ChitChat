@@ -1,30 +1,78 @@
-import { Schema, model, models } from "mongoose";
+import mongoose, { Schema, model } from "mongoose";
+import bcrypt from "bcrypt";
+import jwt from "jsonwebtoken";
+import dotenv from "dotenv";
 
-const userSchema = new Schema({
+dotenv.config({
+  path: "./.env",
+});
+
+const userSchema = new Schema(
+  {
     name: {
-        type: String,
-        required: true
+      type: String,
+      required: true,
     },
     username: {
-        type: String,
-        required: true,
-        unique: true
+      type: String,
+      required: true,
+      unique: true,
     },
     password: {
-        type: String,
-        required: true,
-        select: false,
+      type: String,
+      required: true,
+      select: false,
+    },
+    bio: {
+      type: String,
     },
     avatar: {
-        public_id: {
-            type: String,
-            required: true
-        },
-        url: {
-            type: String,
-            required: true
-        }
-    }
-}, { timestamp: true });
+      public_id: {
+        type: String,
+        required: true,
+      },
+      url: {
+        type: String,
+        required: true,
+      },
+    },
+  },
+  { timestamp: true }
+);
 
-export const User = models.User ||  model("User", userSchema);
+userSchema.pre("save", async function (next) {
+  if (!this.isModified("password")) return next();
+
+  this.password = await bcrypt.hash(this.password, 10);
+  next();
+});
+userSchema.methods.generateAccessToken = async function () {
+  return jwt.sign(
+    {
+      _id: this._id,
+      username: this.username,
+      name: this.name,
+    },
+    process.env.ACCESS_TOKEN_SECRET,
+    {
+      expiresIn: process.env.ACCESS_TOKEN_EXPIRY,
+    }
+  );
+};
+userSchema.methods.generateRefreshToken = async function () {
+  return jwt.sign(
+    {
+      _id: this._id,
+    },
+    process.env.REFRESH_TOKEN_SECRET,
+    {
+      expiresIn: process.env.REFRESH_TOKEN_EXPIRY,
+    }
+  );
+};
+
+userSchema.methods.isPasswordCorrect = async function (password) {
+  return await bcrypt.compare(password, this.password);
+};
+
+export const User = mongoose.models.User || model("User", userSchema);
