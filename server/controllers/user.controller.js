@@ -14,10 +14,8 @@ const generateTokens = async (user_id) => {
     const refreshToken = await user.generateRefreshToken();
     user.refreshToken = refreshToken;
     await user.save({ validateBeforeSave: false });
-    console.log(user);
     return { accessToken, refreshToken };
   } catch (error) {
-    console.log(error);
     throw new ApiError(500, "Something went wrong while generating token");
   }
 };
@@ -142,7 +140,5 @@ const getProfile = asyncHandler(async (req, res) => {
     .status(200)
     .json(new ApiResponse(200, user, "profile fetched successfully"));
 });
-
-
 
 export { registerUser, loginUser, getProfile, logoutUser };
