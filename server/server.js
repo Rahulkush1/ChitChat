@@ -5,6 +5,7 @@ dotenv.config({
   path: "./.env",
 });
 import connectDB from "./db/connectDB.js";
+import { createUser } from "./seeders/seed.js";
 
 const port = process.env.PORT || 3000;
 
@@ -15,3 +16,5 @@ connectDB()
     }),
   ])
   .catch((err) => console.log("MongoDB connection failed !!!", err));
+
+// createUser(10);
