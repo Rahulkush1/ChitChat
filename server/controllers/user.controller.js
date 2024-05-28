@@ -141,4 +141,70 @@ const getProfile = asyncHandler(async (req, res) => {
     .json(new ApiResponse(200, user, "profile fetched successfully"));
 });
 
-export { registerUser, loginUser, getProfile, logoutUser };
+const updateUserDetails = asyncHandler(async (req, res) => {
+  const { name, username, bio } = req.body;
+
+  if (!name || !username || !bio) {
+    throw new ApiError(404, "All Feilds are required!");
+  }
+
+  const updateUserDetails = await User.findByIdAndUpdate(
+    req.user._id,
+    { name, username, bio },
+    {
+      new: true,
+      runValidators: true,
+      useFindAndModify: false,
+    }
+  );
+
+  if (!updateUserDetails) {
+    throw new ApiError(500, "Somthiong went wrong while updating user details");
+  }
+
+  return res
+    .status(200)
+    .json(new ApiResponse(200, updateUserDetails, "User details updated"));
+});
+
+const updatePassword = asyncHandler(async (req, res) => {
+  const { password, oldPassword, confirmPassword } = req.body;
+
+  if (!password) {
+    throw new ApiError(400, "Invalid password");
+  }
+
+  const user = await User.findById(req.user?._id).select("+password");
+
+  if (!user) {
+    throw new ApiError(500, "Somthing went wrong wile updating password");
+  }
+
+  const isPasswordCorrect = await user.isPasswordCorrect(oldPassword);
+
+  if (!isPasswordCorrect) {
+    throw new ApiError(401, "Old Password is Incorrect");
+  }
+
+  if (password === oldPassword) {
+    throw new ApiError(403, "New Passwword can not be same as old password");
+  }
+
+  if (password !== confirmPassword) {
+    throw new ApiError(403, "Password do not match");
+  }
+
+  user.password = password;
+  await user.save();
+
+  return res.status(200).json(new ApiResponse(200, user, "Password updated"));
+});
+
+export {
+  registerUser,
+  loginUser,
+  getProfile,
+  logoutUser,
+  updateUserDetails,
+  updatePassword,
+};
