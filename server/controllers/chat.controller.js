@@ -1,4 +1,5 @@
 import { ALERT, REFETCH_CHAT } from "../constants/events.js";
+import { getOtherMember } from "../lib/helper.js";
 import { Chat } from "../models/chat.model.js";
 import { ApiError } from "../utils/ApiError.js";
 import { ApiResponse } from "../utils/ApiResponse.js";
@@ -35,4 +36,57 @@ const newGroupChat = asyncHandler(async (req, res) => {
   return res.status(201).json(new ApiResponse(201, chatGroup, "Group Created"));
 });
 
-export { newGroupChat };
+const getMyChats = asyncHandler(async (req, res) => {
+  const chats = await Chat.find({ members: req.user }).populate(
+    "members",
+    "name avatar"
+  );
+
+  if (!chats) {
+    throw new ApiError(404, "Chats not found");
+  }
+
+  const transformedChats = chats.map(({ _id, name, members, groupChat }) => {
+    const otherMember = getOtherMember(members, req.user);
+
+    return {
+      _id,
+      groupChat,
+      avatar: groupChat
+        ? members.slice(0, 3).map(({ avatar }) => avatar.url)
+        : [otherMember.avatar.url],
+      name: groupChat ? name : otherMember.name,
+      members: members.reduce((prev, curr) => {
+        if (curr._id.toString() !== req.user._id.toString()) {
+          prev.push(curr._id);
+        }
+        return prev;
+      }, []),
+    };
+  });
+
+  res.status(200).json(new ApiResponse(200, transformedChats, "Chat fetched"));
+});
+
+const getMyGroups = asyncHandler(async (req, res) => {
+  const chats = await Chat.find({
+    members: req.user,
+    groupChat: true,
+    creator: req.user,
+  }).populate("members", "name avatar");
+
+  if (!chats) {
+    throw new ApiError(404, "Group not found");
+  }
+  const groups = chats.map(({ _id, groupChat, members, name }) => ({
+    _id,
+    groupChat,
+    name,
+    avatar: members.slice(0, 3).map(({ avatar }) => avatar.url),
+  }));
+  res
+    .status(200)
+    .json(new ApiResponse(200, groups, "Group Fetched Successfully"));
+});
+
+export { newGroupChat, getMyChats, getMyGroups };
