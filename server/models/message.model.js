@@ -15,7 +15,7 @@ const messageSchema = new Schema(
       ref: "Chat",
       required: true,
     },
-    attachment: [
+    attachments: [
       {
         public_id: {
           type: String,

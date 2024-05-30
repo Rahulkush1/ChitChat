@@ -1,4 +1,4 @@
-import { ALERT, ATTACHMENT_ALERT, REFETCH_CHAT } from "../constants/events.js";
+import { ALERT, ATTACHMENT_ALERT, NEW_ATTACHMENT, REFETCH_CHAT } from "../constants/events.js";
 import { getOtherMember } from "../lib/helper.js";
 import { Chat } from "../models/chat.model.js";
 import { Message } from "../models/message.model.js";
@@ -6,6 +6,7 @@ import { User } from "../models/user.model.js";
 import { ApiError } from "../utils/ApiError.js";
 import { ApiResponse } from "../utils/ApiResponse.js";
 import { asyncHandler } from "../utils/asyncHandler.js";
+import { uploadOnCludinary } from "../utils/cloudinary.js";
 import { emitEvent } from "../utils/features.js";
 
 const newGroupChat = asyncHandler(async (req, res) => {
@@ -228,14 +229,28 @@ const sendAttachment = asyncHandler(async (req, res) => {
   if (!chat) {
     throw new ApiError(404, "Chat not found");
   }
-
-  const files = req.body.files || [];
-
-  if (files.length > 1) {
+  let imagesObject = [];
+  const files = req.files || [];
+  if (files.length < 1) {
     throw new ApiError(400, "Please provide attachments");
   }
 
-  const attachments = [];
+  for (let i = 0; i < req.files.length; i++) {
+    let localFilePath = req.files[i].path;
+    if (!localFilePath) {
+      throw new ApiError(400, "Please upload images");
+    }
+    const image = await uploadOnCludinary(localFilePath);
+    if (!image) {
+      throw new ApiError(400, "Something went wrong while uploading");
+    }
+
+    imagesObject.push({
+      public_id: image.public_id,
+      url: image.secure_url,
+    });
+  }
+  const attachments = imagesObject;
   const messageForRealTime = {
     content: "",
     attachments,
@@ -247,14 +262,14 @@ const sendAttachment = asyncHandler(async (req, res) => {
   };
   const messageForDB = {
     content: "",
-    attachments,
+    attachments: attachments,
     sender: req.user?._id,
     chat: chatId,
   };
 
   const message = await Message.create(messageForDB);
 
-  emitEvent(req.NEW_ATTACHMENT, chat.members, {
+  emitEvent(req, NEW_ATTACHMENT, chat.members, {
     message: messageForRealTime,
     chatId,
   });
