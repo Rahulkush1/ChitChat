@@ -1,6 +1,7 @@
-import { ALERT, REFETCH_CHAT } from "../constants/events.js";
+import { ALERT, ATTACHMENT_ALERT, REFETCH_CHAT } from "../constants/events.js";
 import { getOtherMember } from "../lib/helper.js";
 import { Chat } from "../models/chat.model.js";
+import { Message } from "../models/message.model.js";
 import { User } from "../models/user.model.js";
 import { ApiError } from "../utils/ApiError.js";
 import { ApiResponse } from "../utils/ApiResponse.js";
@@ -101,6 +102,10 @@ const addMembers = asyncHandler(async (req, res) => {
   }
   const chat = await Chat.findById(chatId);
 
+  if (!chat) {
+    throw new ApiError(404, "Chat not found");
+  }
+
   if (!chat.groupChat) {
     throw new ApiError(400, "This is not a group chat!");
   }
@@ -142,6 +147,198 @@ const addMembers = asyncHandler(async (req, res) => {
     .json(new ApiResponse(200, {}, "Members added successfully"));
 });
 
+const removeMember = asyncHandler(async (req, res) => {
+  const { userId, chatId } = req.body;
 
+  const chat = await Chat.findById(chatId);
+  const userThatWillRemoved = await User.findById(userId, "name");
 
-export { newGroupChat, getMyChats, getMyGroups, addMembers };
+  if (!chat) {
+    throw new ApiError(404, "Chat not found");
+  }
+
+  if (!chat.groupChat) {
+    throw new ApiError(400, "This is not a group chat!");
+  }
+
+  if (chat.creator.toString() !== req.user._id.toString()) {
+    throw new ApiError(403, "You are not allowed to add members to this group");
+  }
+
+  if (chat.members.length <= 3) {
+    throw new ApiError(400, "Gruop must have at least 3 members");
+  }
+  chat.members = chat.members.filter(
+    (member) => member.toString() !== userId.toString()
+  );
+
+  await chat.save();
+
+  emitEvent(
+    req,
+    ALERT,
+    chat.members,
+    `${userThatWillRemoved.name} has been removed from the group`
+  );
+  emitEvent(req, REFETCH_CHAT, chat.members);
+
+  return res
+    .status(200)
+    .json(new ApiResponse(200, {}, "Member removed successfully"));
+});
+
+const leaveGroup = asyncHandler(async (req, res) => {
+  const chatId = req.params.id;
+
+  const chat = await Chat.findById(chatId);
+
+  if (!chat) {
+    throw new ApiError(404, "Chat not found");
+  }
+  if (!chat.groupChat) {
+    throw new ApiError(400, "This is not a group chat!");
+  }
+  const remainingMembers = chat.members.filter(
+    (member) => member.toString() !== req.user._id.toString()
+  );
+
+  if (remainingMembers.length < 3) {
+    throw new ApiError(400, "Group must have at least 3 members");
+  }
+  if (chat.creator.toString() === req.user._id.toString()) {
+    const randomElement = Math.floor(Math.random() * remainingMembers.length);
+    const newCreator = remainingMembers[randomElement];
+    chat.creator = newCreator;
+  }
+  chat.members = remainingMembers;
+
+  await chat.save();
+
+  emitEvent(req, ALERT, chat.members, `${req.user.name} has left the group`);
+
+  return res
+    .status(200)
+    .json(new ApiResponse(200, {}, "Member leave successfully"));
+});
+
+const sendAttachment = asyncHandler(async (req, res) => {
+  const { chatId } = req.body;
+  const chat = await Chat.findById(chatId);
+
+  if (!chat) {
+    throw new ApiError(404, "Chat not found");
+  }
+
+  const files = req.body.files || [];
+
+  if (files.length > 1) {
+    throw new ApiError(400, "Please provide attachments");
+  }
+
+  const attachments = [];
+  const messageForRealTime = {
+    content: "",
+    attachments,
+    sender: {
+      _id: req.user._id,
+      name: req.user.name,
+    },
+    chat: chatId,
+  };
+  const messageForDB = {
+    content: "",
+    attachments,
+    sender: req.user?._id,
+    chat: chatId,
+  };
+
+  const message = await Message.create(messageForDB);
+
+  emitEvent(req.NEW_ATTACHMENT, chat.members, {
+    message: messageForRealTime,
+    chatId,
+  });
+
+  emitEvent(req, ATTACHMENT_ALERT, chat.members, {
+    chatId,
+  });
+
+  return res
+    .status(200)
+    .json(new ApiResponse(200, message, "Attachment sent successfully"));
+});
+
+const getChatDetails = asyncHandler(async (req, res) => {
+  if (req.query.populate === "true") {
+    const chatId = req.params.id;
+    const chat = await Chat.findById(chatId)
+      .populate("members", "name avatar")
+      .lean();
+
+    if (!chat) {
+      throw new ApiError(404, "Chat not found");
+    }
+
+    chat.members = chat.members.map(({ _id, name, avatar }) => ({
+      _id,
+      name,
+      avatar: avatar.url,
+    }));
+
+    return res
+      .status(200)
+      .json(new ApiResponse(200, chat, "Chat Details fetched successfully"));
+  } else {
+    const chatId = req.params.id;
+    const chat = await Chat.findById(chatId);
+
+    if (!chat) {
+      throw new ApiError(404, "Chat not found");
+    }
+
+    return res
+      .status(200)
+      .json(new ApiResponse(200, chat, "Chat Details fetched Successfully"));
+  }
+});
+
+const renameGroupName = asyncHandler(async (req, res) => {
+  const chatId = req.params.id;
+  const { name } = req.query;
+
+  const chat = await Chat.findById(chatId);
+
+  if (!chat) {
+    throw new ApiError(404, "Chat not Found");
+  }
+
+  if (!chat.groupChat) {
+    throw new ApiError(400, "This is not a group chat!");
+  }
+
+  if (chat.creator.toString() !== req.user._id.toString()) {
+    throw new ApiError(403, "You are not allowed to rename the group name");
+  }
+
+  chat.name = name;
+
+  await chat.save();
+
+  emitEvent(req, REFETCH_CHAT, chat.members);
+
+  return res
+    .status(200)
+    .json(new ApiResponse(200, chat, "Group rename successfully"));
+});
+
+export {
+  newGroupChat,
+  getMyChats,
+  getMyGroups,
+  addMembers,
+  removeMember,
+  leaveGroup,
+  sendAttachment,
+  getChatDetails,
+  renameGroupName,
+};
