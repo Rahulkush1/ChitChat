@@ -3,6 +3,7 @@ import { User } from "../models/user.model.js";
 import { ApiError } from "../utils/ApiError.js";
 import { ApiResponse } from "../utils/ApiResponse.js";
 import { asyncHandler } from "../utils/asyncHandler.js";
+import { uploadOnCludinary } from "../utils/cloudinary.js";
 
 const generateTokens = async (user_id) => {
   try {
@@ -22,25 +23,43 @@ const generateTokens = async (user_id) => {
 
 const registerUser = asyncHandler(async (req, res) => {
   const { name, username, password, bio } = req.body;
-
+  const avatar = req.file.path;
+  console.log(req.file);
   if (!name || !username || !password || !avatar) {
     throw new ApiError(400, "All Fields required");
   }
-  const avatar = {
-    public_id: `sdff`,
-    url: `sdfg`,
-  };
+
   const user = await User.create({
     name,
     username,
     bio,
     password,
-    avatar,
+    avatar: {
+      public_id: "demo",
+      url: "demo",
+    },
   });
+
+  const response = await uploadOnCludinary(avatar);
+
+  user.avatar = {
+    public_id: response.public_id,
+    url: response.url,
+  };
+
+  await user.save({ validateBeforeSave: false });
 
   if (!user) {
     throw new ApiError(403, "Somthing went wrong while registering User");
   }
+
+  const transformedUser = {
+    _id: user._id,
+    name: user.name,
+    username: username,
+    bio: user.bio,
+    avatar: user.avatar.url,
+  };
 
   const options = {
     maxAge: 4 * 24 * 60 * 60 * 1000,
@@ -58,7 +77,11 @@ const registerUser = asyncHandler(async (req, res) => {
     .json(
       new ApiResponse(
         201,
-        { user: user, accessToken: accessToken, refreshToken: refreshToken },
+        {
+          user: transformedUser,
+          accessToken: accessToken,
+          refreshToken: refreshToken,
+        },
         "User created successfully"
       )
     );
