@@ -4,6 +4,7 @@ import {
   addMembers,
   deleteGroup,
   getChatDetails,
+  getMessages,
   getMyChats,
   getMyGroups,
   leaveGroup,
@@ -25,6 +26,7 @@ router.route("/leave/:id").delete(isAuthenticated, leaveGroup);
 router
   .route("/message")
   .post(isAuthenticated, sendAttachmentMulter, sendAttachment);
+router.route("/message/:id").get(isAuthenticated, getMessages);
 router
   .route("/:id")
   .get(isAuthenticated, getChatDetails)

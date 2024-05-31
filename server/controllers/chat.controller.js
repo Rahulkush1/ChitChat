@@ -394,6 +394,35 @@ const deleteGroup = asyncHandler(async (req, res) => {
     .status(200)
     .json(new ApiResponse(200, {}, "Chat deleted successfully"));
 });
+
+const getMessages = asyncHandler(async (req, res) => {
+  const chatId = req.params.id;
+  const { page = 1 } = req.query;
+  const resultPerPage = 20;
+  const skip = (page - 1) * resultPerPage;
+
+  const [messages, totalMessagesCount] = await Promise.all([
+    Message.find({ chat: chatId })
+      .sort({ createdAt: -1 })
+      .skip(skip)
+      .limit(resultPerPage)
+      .populate("sender", "name avatar")
+      .lean(),
+    Message.countDocuments({ chat: chatId }),
+  ]);
+
+  const totalPages = Math.ceil(totalMessagesCount / resultPerPage);
+
+  return res
+    .status(200)
+    .json(
+      new ApiResponse(
+        200,
+        { messages: messages.reverse(), totalPages: totalPages },
+        "Messages fetch Successfully"
+      )
+    );
+});
 export {
   newGroupChat,
   getMyChats,
@@ -405,4 +434,5 @@ export {
   getChatDetails,
   renameGroupName,
   deleteGroup,
+  getMessages,
 };
