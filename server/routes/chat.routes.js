@@ -2,6 +2,7 @@ import express from "express";
 import { isAuthenticated } from "../middlewares/auth.middleware.js";
 import {
   addMembers,
+  deleteGroup,
   getChatDetails,
   getMyChats,
   getMyGroups,
@@ -28,6 +29,6 @@ router
   .route("/:id")
   .get(isAuthenticated, getChatDetails)
   .put(isAuthenticated, renameGroupName)
-  .delete();
+  .delete(isAuthenticated, deleteGroup);
 
 export default router;

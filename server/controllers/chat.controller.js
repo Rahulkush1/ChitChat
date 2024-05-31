@@ -1,4 +1,9 @@
-import { ALERT, ATTACHMENT_ALERT, NEW_ATTACHMENT, REFETCH_CHAT } from "../constants/events.js";
+import {
+  ALERT,
+  ATTACHMENT_ALERT,
+  NEW_ATTACHMENT,
+  REFETCH_CHAT,
+} from "../constants/events.js";
 import { getOtherMember } from "../lib/helper.js";
 import { Chat } from "../models/chat.model.js";
 import { Message } from "../models/message.model.js";
@@ -6,7 +11,10 @@ import { User } from "../models/user.model.js";
 import { ApiError } from "../utils/ApiError.js";
 import { ApiResponse } from "../utils/ApiResponse.js";
 import { asyncHandler } from "../utils/asyncHandler.js";
-import { uploadOnCludinary } from "../utils/cloudinary.js";
+import {
+  deleteFilesFromCloudinary,
+  uploadOnCludinary,
+} from "../utils/cloudinary.js";
 import { emitEvent } from "../utils/features.js";
 
 const newGroupChat = asyncHandler(async (req, res) => {
@@ -346,6 +354,46 @@ const renameGroupName = asyncHandler(async (req, res) => {
     .json(new ApiResponse(200, chat, "Group rename successfully"));
 });
 
+const deleteGroup = asyncHandler(async (req, res) => {
+  const chatId = req.params.id;
+  const chat = await Chat.findById(chatId);
+
+  if (!chat) {
+    throw new ApiError(404, "Chat not Found");
+  }
+
+  const members = chat.members;
+
+  if (chat.groupChat && chat.creator.toString() !== req.user._id.toString()) {
+    throw new ApiError(403, "You are not allowed to delete this group");
+  }
+
+  const messageWithAttchments = await Message.find({
+    chat: chatId,
+    attachments: { $exists: true, $ne: [] },
+  });
+
+  const public_ids = [];
+  messageWithAttchments.forEach(({ attachments }) => {
+    attachments.forEach(({ public_id }) => public_ids.push(public_id));
+  });
+
+  const deletedImages = public_ids.forEach((public_id) =>
+    deleteFilesFromCloudinary(public_id)
+  );
+
+  await Promise.all([
+    deletedImages,
+    chat.deleteOne(),
+    Message.deleteMany({ chat: chatId }),
+  ]);
+
+  emitEvent(req, REFETCH_CHAT, {}, members);
+
+  return res
+    .status(200)
+    .json(new ApiResponse(200, {}, "Chat deleted successfully"));
+});
 export {
   newGroupChat,
   getMyChats,
@@ -356,4 +404,5 @@ export {
   sendAttachment,
   getChatDetails,
   renameGroupName,
+  deleteGroup,
 };
