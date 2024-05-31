@@ -1,9 +1,13 @@
-import { waitForDebugger } from "inspector";
 import { User } from "../models/user.model.js";
 import { ApiError } from "../utils/ApiError.js";
 import { ApiResponse } from "../utils/ApiResponse.js";
 import { asyncHandler } from "../utils/asyncHandler.js";
-import { uploadOnCludinary } from "../utils/cloudinary.js";
+import {
+  deleteFilesFromCloudinary,
+  uploadOnCludinary,
+} from "../utils/cloudinary.js";
+import sendmail from "../utils/sendEmail.js";
+import crypto from "crypto";
 
 const generateTokens = async (user_id) => {
   try {
@@ -22,10 +26,10 @@ const generateTokens = async (user_id) => {
 };
 
 const registerUser = asyncHandler(async (req, res) => {
-  const { name, username, password, bio } = req.body;
+  const { name, username, password, bio, email } = req.body;
   const avatar = req.file.path;
   console.log(req.file);
-  if (!name || !username || !password || !avatar) {
+  if (!name || !username || !password || !avatar || !email) {
     throw new ApiError(400, "All Fields required");
   }
 
@@ -34,6 +38,7 @@ const registerUser = asyncHandler(async (req, res) => {
     username,
     bio,
     password,
+    email,
     avatar: {
       public_id: "demo",
       url: "demo",
@@ -53,8 +58,11 @@ const registerUser = asyncHandler(async (req, res) => {
     throw new ApiError(403, "Somthing went wrong while registering User");
   }
 
+  await sendOtp(user);
+
   const transformedUser = {
     _id: user._id,
+    email: user.email,
     name: user.name,
     username: username,
     bio: user.bio,
@@ -190,6 +198,40 @@ const updateUserDetails = asyncHandler(async (req, res) => {
     .json(new ApiResponse(200, updateUserDetails, "User details updated"));
 });
 
+const updateUserAvatar = asyncHandler(async (req, res) => {
+  const avatar = req.file?.path;
+
+  if (!avatar) {
+    throw new ApiError(404, "User avatar is required");
+  }
+
+  const avatarPublicId = req.user?.avatar?.public_id;
+
+  if (!avatarPublicId) {
+    throw new ApiError(404, "User avatar not found");
+  }
+
+  await deleteFilesFromCloudinary(avatarPublicId);
+  const uploadedAvatar = await uploadOnCludinary(avatar);
+
+  if (!uploadedAvatar) {
+    throw new ApiError(403, "Failed to upload image");
+  }
+
+  const updatedAvatar = {
+    public_id: uploadedAvatar.public_id,
+    url: uploadedAvatar.url,
+  };
+
+  req.user.avatar = updatedAvatar;
+
+  await req.user.save({ validateBeforeSave: false });
+
+  return res
+    .status(200)
+    .json(new ApiResponse(200, req.user, "Profile Image updated successfully"));
+});
+
 const updatePassword = asyncHandler(async (req, res) => {
   const { password, oldPassword, confirmPassword } = req.body;
 
@@ -223,6 +265,115 @@ const updatePassword = asyncHandler(async (req, res) => {
   return res.status(200).json(new ApiResponse(200, user, "Password updated"));
 });
 
+const forgotPassword = asyncHandler(async (req, res) => {
+  const { email } = req.body;
+  if (!email) {
+    throw new ApiError(404, "Please provide a valid email");
+  }
+
+  const user = await User.findOne({ email });
+
+  if (!user) {
+    throw new ApiError(403, "User with this email does not exist");
+  }
+
+  const resetToken = await user.generateResetPasswordToken();
+
+  if (!resetToken) {
+    throw new ApiError(500, "Somthing went wrong while generating reset token");
+  }
+
+  await user.save({ validateBeforeSave: false });
+
+  const resetPasswordUrl = `${req.protocol}://${req.get(
+    "host"
+  )}/api/v1/user/password/reset/${resetToken}`;
+
+  const options = {
+    email: user.email,
+    subject: "Reset Your Password",
+    message: `Hello ${user.name},\n\nPlease reset your password by clicking the link below:\n\n${resetPasswordUrl}\n\nIf you did not make this request, please ignore this email and your password will remain unchanged.\n\nSincerely,\n${process.env.FRONTEND_NAME}`,
+  };
+  try {
+    await sendmail(options);
+    return res
+      .status(200)
+      .json(
+        new ApiResponse(200, {}, `Email sent to ${user.email} successfully`)
+      );
+  } catch (error) {
+    user.resetPasswordToken = undefined;
+    user.resetPasswordExpire = undefined;
+
+    await user.save({ validateBeforeSave: false });
+    throw new ApiError(500, error.message);
+  }
+});
+
+const resetPassword = asyncHandler(async (req, res) => {
+  const token = req.params.token;
+
+  if (!token) {
+    throw new ApiError(404, "Invalid resent password url");
+  }
+
+  const { password } = req.query;
+
+  if (!password) {
+    throw new ApiError(400, "password is required");
+  }
+
+  const resetPasswordToken = crypto
+    .createHash("sha256")
+    .update(token)
+    .digest("hex");
+
+  if (!resetPasswordToken) {
+    throw new ApiError(404, "Invalid resent password url");
+  }
+
+  const user = await User.findOne({
+    resetPasswordToken,
+    resetPasswordExpire: { $gt: Date.now() },
+  });
+
+  if (!user) {
+    throw new ApiError(400, "Password reset token is invalid or has expired");
+  }
+
+  user.password = password;
+  user.resetPasswordToken = undefined;
+  user.resetPasswordExpire = undefined;
+
+  await user.save();
+
+  return res
+    .status(200)
+    .json(new ApiResponse(200, user, "Password reset successfully"));
+});
+
+const sendOtp = async (user) => {
+  const otp = Math.floor(Math.random() * 900000);
+
+  console.log(otp);
+
+  if (!otp) {
+    throw new ApiError(500, "Somthing went wrong");
+  }
+
+  user.otp = otp;
+  user.otpExpiry = Date.now() + 10 * 60 * 1000;
+
+  await user.save({ validateBeforeSave: false });
+
+  const options = {
+    email: user.email,
+    subject: "Your OTP Code for Account Verification",
+    message: `Dear ${user.name},\n\nThank you for registering with ChitChat. To complete your account verification, please use the One-Time Password (OTP) provided below:\n\nYour OTP Code: ${otp}\n\nThis code is valid for the next 10 minutes. For security reasons, please do not share this code with anyone.\n\nIf you did not request this verification, please ignore this email or contact our support team immediately.\n\nThank you for choosing ChitChat.\n\nWe look forward to serving you.\n\nBest regards,\nChitChat\nchitchat.help.gmail.com`,
+  };
+  await sendmail(options);
+};
+
 export {
   registerUser,
   loginUser,
@@ -230,4 +381,7 @@ export {
   logoutUser,
   updateUserDetails,
   updatePassword,
+  forgotPassword,
+  resetPassword,
+  updateUserAvatar,
 };
