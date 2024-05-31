@@ -2,6 +2,7 @@ import mongoose, { Schema, model } from "mongoose";
 import bcrypt from "bcrypt";
 import jwt from "jsonwebtoken";
 import dotenv from "dotenv";
+import crypto from "crypto";
 
 dotenv.config({
   path: "./.env",
@@ -12,6 +13,11 @@ const userSchema = new Schema(
     name: {
       type: String,
       required: true,
+    },
+    email: {
+      type: String,
+      required: true,
+      unique: true,
     },
     username: {
       type: String,
@@ -36,6 +42,10 @@ const userSchema = new Schema(
         required: true,
       },
     },
+    otp: Number,
+    otpExpiry: Date,
+    resetPasswordToken: String,
+    resetPasswordExpire: Date,
   },
   { timestamp: true }
 );
@@ -73,6 +83,16 @@ userSchema.methods.generateRefreshToken = async function () {
 
 userSchema.methods.isPasswordCorrect = async function (password) {
   return await bcrypt.compare(password, this.password);
+};
+
+userSchema.methods.generateResetPasswordToken = async function () {
+  const resetToken = crypto.randomBytes(20).toString("hex");
+  this.resetPasswordToken = crypto
+    .createHash("sha256")
+    .update(resetToken)
+    .digest("hex");
+  this.resetPasswordExpire = Date.now() + 15 * 60 * 1000;
+  return resetToken;
 };
 
 export const User = mongoose.models.User || model("User", userSchema);
