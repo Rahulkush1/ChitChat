@@ -42,6 +42,10 @@ const userSchema = new Schema(
         required: true,
       },
     },
+    activated: {
+      type: Boolean,
+      default: false,
+    },
     otp: Number,
     otpExpiry: Date,
     resetPasswordToken: String,
