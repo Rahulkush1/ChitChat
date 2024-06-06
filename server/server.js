@@ -5,7 +5,13 @@ dotenv.config({
   path: "./.env",
 });
 import connectDB from "./db/connectDB.js";
-import { createUser } from "./seeders/seed.js";
+import {
+  createGroupChats,
+  createMessage,
+  createMessageInChat,
+  createSingleChats,
+  createUser,
+} from "./seeders/seed.js";
 import { v2 as cloudinary } from "cloudinary";
 
 const port = process.env.PORT || 3000;
@@ -25,3 +31,7 @@ connectDB()
   .catch((err) => console.log("MongoDB connection failed !!!", err));
 
 // createUser(10);
+// createSingleChats(5);
+// createGroupChats(10);
+// createMessage(10);
+// createMessageInChat("66615786f5858f22f8dc8abb", 10)

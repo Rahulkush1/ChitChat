@@ -413,15 +413,17 @@ const getMessages = asyncHandler(async (req, res) => {
 
   const totalPages = Math.ceil(totalMessagesCount / resultPerPage);
 
-  return res
-    .status(200)
-    .json(
-      new ApiResponse(
-        200,
-        { messages: messages.reverse(), totalPages: totalPages },
-        "Messages fetch Successfully"
-      )
-    );
+  return res.status(200).json(
+    new ApiResponse(
+      200,
+      {
+        messages: messages.reverse(),
+        totalPages: totalPages,
+        totalMessagesCount,
+      },
+      "Messages fetch Successfully"
+    )
+  );
 });
 export {
   newGroupChat,
