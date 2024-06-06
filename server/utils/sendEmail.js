@@ -19,7 +19,7 @@ const sendmail = async (options) => {
     },
   });
 
-  await transporter.sendMail(mailOptions, function (error, info) {
+  transporter.sendMail(mailOptions, function (error, info) {
     if (error) {
       console.log(error);
     } else {
