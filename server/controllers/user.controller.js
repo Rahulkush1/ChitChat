@@ -108,6 +108,10 @@ const loginUser = asyncHandler(async (req, res) => {
     throw new ApiError(400, "Inavalid user credentials");
   }
 
+  if (!user.activated) {
+    throw new ApiError(401, "Please activate your account");
+  }
+
   const isPasswordCorrect = await user.isPasswordCorrect(password);
 
   if (!isPasswordCorrect) {
@@ -377,13 +381,11 @@ const sendOtp = async (user) => {
 
 const verifyOtp = asyncHandler(async (req, res) => {
   const { otp, username } = req.body;
-
+  const currentDate = new Date(Date.now());
   if (!otp) {
     throw new ApiError(403, "Please Enter your otp");
   }
-
   const user = await User.findOne({ username });
-
   if (!user) {
     throw new ApiError(404, "User not Found");
   }
@@ -392,12 +394,11 @@ const verifyOtp = asyncHandler(async (req, res) => {
     throw new ApiError(400, "Incorrect OTP");
   }
 
-  if (!(user.otpExpiry >= Date.now())) {
+  if (user.otpExpiry < currentDate) {
     throw new ApiError(400, "OTP Expired");
   }
 
-  if (otp === user.otp && user.otpExpiry <= Date.now()) {
-    // console.log()
+  if (otp === user.otp && user.otpExpiry >= currentDate) {
     user.activated = true;
     user.otp = undefined;
     user.otpExpiry = undefined;
