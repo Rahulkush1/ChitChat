@@ -42,6 +42,14 @@ const userSchema = new Schema(
         required: true,
       },
     },
+    coverImage: {
+      public_id: {
+        type: String,
+      },
+      url: {
+        type: String,
+      },
+    },
     activated: {
       type: Boolean,
       default: false,

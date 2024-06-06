@@ -1,7 +1,6 @@
 import nodemailer from "nodemailer";
 
 const sendmail = async (options) => {
-  console.log(options);
   let mailOptions = {
     from: process.env.EMAIL,
     to: options.email,

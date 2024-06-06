@@ -1,5 +1,8 @@
 import express from "express";
-import { singleAvatar } from "../middlewares/multer.middleware.js";
+import {
+  singleAvatar,
+  singleCoverImage,
+} from "../middlewares/multer.middleware.js";
 import {
   forgotPassword,
   getProfile,
@@ -10,6 +13,7 @@ import {
   resetPassword,
   updatePassword,
   updateUserAvatar,
+  updateUserCoverImage,
   updateUserDetails,
   verifyOtp,
 } from "../controllers/user.controller.js";
@@ -27,6 +31,9 @@ router.route("/edit/profile").put(isAuthenticated, updateUserDetails);
 router
   .route("/edit/profile/image")
   .patch(isAuthenticated, singleAvatar, updateUserAvatar);
+router
+  .route("/edit/profile/coverImage")
+  .patch(isAuthenticated, singleCoverImage, updateUserCoverImage);
 router.route("/edit/password").patch(isAuthenticated, updatePassword);
 router.route("/password/forgot").post(forgotPassword);
 router.route("/password/reset/:token").patch(resetPassword);
