@@ -1,3 +1,4 @@
+import { response } from "express";
 import { User } from "../models/user.model.js";
 import { ApiError } from "../utils/ApiError.js";
 import { ApiResponse } from "../utils/ApiResponse.js";
@@ -105,6 +106,10 @@ const loginUser = asyncHandler(async (req, res) => {
 
   if (!user) {
     throw new ApiError(400, "Inavalid user credentials");
+  }
+
+  if (!user.activated) {
+    throw new ApiError(401, "Please activate your account");
   }
 
   const isPasswordCorrect = await user.isPasswordCorrect(password);
@@ -374,6 +379,52 @@ const sendOtp = async (user) => {
   await sendmail(options);
 };
 
+const verifyOtp = asyncHandler(async (req, res) => {
+  const { otp, username } = req.body;
+  const currentDate = new Date(Date.now());
+  if (!otp) {
+    throw new ApiError(403, "Please Enter your otp");
+  }
+  const user = await User.findOne({ username });
+  if (!user) {
+    throw new ApiError(404, "User not Found");
+  }
+
+  if (otp !== user.otp) {
+    throw new ApiError(400, "Incorrect OTP");
+  }
+
+  if (user.otpExpiry < currentDate) {
+    throw new ApiError(400, "OTP Expired");
+  }
+
+  if (otp === user.otp && user.otpExpiry >= currentDate) {
+    user.activated = true;
+    user.otp = undefined;
+    user.otpExpiry = undefined;
+  }
+
+  await user.save({ validateBeforeSave: false });
+
+  return res.status(200).json(new ApiResponse(200, {}, "OTP verified"));
+});
+
+const resendOtp = asyncHandler(async (req, res) => {
+  const { email } = req.body;
+
+  const user = await User.findOne({ email });
+
+  if (!user) {
+    throw new ApiError(404, "User not found");
+  }
+
+  await sendOtp(user);
+
+  return res
+    .status(200)
+    .json(new ApiResponse(200, user.otp, "Otp sent successfully"));
+});
+
 export {
   registerUser,
   loginUser,
@@ -384,4 +435,6 @@ export {
   forgotPassword,
   resetPassword,
   updateUserAvatar,
+  verifyOtp,
+  resendOtp,
 };

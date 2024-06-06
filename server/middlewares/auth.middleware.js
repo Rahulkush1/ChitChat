@@ -19,6 +19,9 @@ export const isAuthenticated = asyncHandler(async (req, res, next) => {
     if (!user) {
       throw new ApiError(401, "Invalid access token");
     }
+    if (!user.activated) {
+      throw new ApiError(401, "Please activate your account");
+    }
     req.user = user;
     next();
   } catch (error) {
