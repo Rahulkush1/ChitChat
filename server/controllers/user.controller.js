@@ -52,6 +52,10 @@ const registerUser = asyncHandler(async (req, res) => {
     public_id: response.public_id,
     url: response.url,
   };
+  user.coverImage = {
+    public_id: "pfrsyfwgcx1ocxtywgof",
+    url: "https://res.cloudinary.com/dmxouatnw/image/upload/v1717673906/pfrsyfwgcx1ocxtywgof.png",
+  };
 
   await user.save({ validateBeforeSave: false });
 
@@ -229,6 +233,40 @@ const updateUserAvatar = asyncHandler(async (req, res) => {
   };
 
   req.user.avatar = updatedAvatar;
+
+  await req.user.save({ validateBeforeSave: false });
+
+  return res
+    .status(200)
+    .json(new ApiResponse(200, req.user, "Profile Image updated successfully"));
+});
+
+const updateUserCoverImage = asyncHandler(async (req, res) => {
+  const coverImage = req.file?.path;
+
+  if (!coverImage) {
+    throw new ApiError(404, "User coverImage is required");
+  }
+
+  const coverImagePublicId = req.user?.coverImage?.public_id;
+
+  if (!coverImagePublicId) {
+    throw new ApiError(404, "User coverImage not found");
+  }
+
+  await deleteFilesFromCloudinary(coverImagePublicId);
+  const uploadedcoverImage = await uploadOnCludinary(coverImage);
+
+  if (!uploadedcoverImage) {
+    throw new ApiError(403, "Failed to upload image");
+  }
+
+  const updatedcoverImage = {
+    public_id: uploadedcoverImage.public_id,
+    url: uploadedcoverImage.url,
+  };
+
+  req.user.coverImage = updatedcoverImage;
 
   await req.user.save({ validateBeforeSave: false });
 
@@ -435,6 +473,7 @@ export {
   forgotPassword,
   resetPassword,
   updateUserAvatar,
+  updateUserCoverImage,
   verifyOtp,
   resendOtp,
 };

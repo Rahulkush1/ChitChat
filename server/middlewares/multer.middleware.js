@@ -11,8 +11,8 @@ const storage = multer.diskStorage({
 
 const upload = multer({ storage });
 
-
 const singleAvatar = upload.single("avatar");
+const singleCoverImage = upload.single("coverImage");
 const sendAttachmentMulter = upload.array("files", 5);
 
-export { singleAvatar, sendAttachmentMulter };
+export { singleAvatar, singleCoverImage, sendAttachmentMulter };
