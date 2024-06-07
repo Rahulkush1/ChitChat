@@ -52,6 +52,7 @@ const registerUser = asyncHandler(async (req, res) => {
     public_id: response.public_id,
     url: response.url,
   };
+
   user.coverImage = {
     public_id: "pfrsyfwgcx1ocxtywgof",
     url: "https://res.cloudinary.com/dmxouatnw/image/upload/v1717673906/pfrsyfwgcx1ocxtywgof.png",
@@ -106,6 +107,7 @@ const loginUser = asyncHandler(async (req, res) => {
   if (!username || !password) {
     throw new ApiError(400, "Username or Password required");
   }
+
   const user = await User.findOne({ username: username }).select(" +password");
 
   if (!user) {
